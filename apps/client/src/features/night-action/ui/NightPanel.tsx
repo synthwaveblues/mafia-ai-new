@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Player, Role } from '@mafia-ai/types'
 import { Button } from '@/shared/ui'
 
@@ -14,11 +15,31 @@ const rolePrompts: Partial<Record<Role, string>> = {
   doctor: 'Choose who to save',
 }
 
+const roleConfirm: Partial<Record<Role, string>> = {
+  mafia: 'Target locked',
+  detective: 'Investigating',
+  doctor: 'Protecting',
+}
+
 export function NightPanel({ players, currentPlayerId, myRole, onAction }: NightPanelProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const prompt = rolePrompts[myRole]
   if (!prompt) return null
 
   const targets = players.filter((p) => p.status === 'alive' && p.id !== currentPlayerId)
+
+  if (selectedId) {
+    const target = players.find((p) => p.id === selectedId)
+    return (
+      <div className="p-4 bg-[#1a1a2e] rounded-xl border-2 border-green-500 mb-5">
+        <div className="text-center">
+          <span className="text-2xl">✓</span>
+          <h3 className="text-green-400 font-bold mt-1">{roleConfirm[myRole]}: {target?.name}</h3>
+          <p className="text-[#666] text-xs mt-2">Waiting for other players...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 bg-[#1a1a2e] rounded-xl border-2 border-indigo-500 mb-5">
@@ -30,7 +51,10 @@ export function NightPanel({ players, currentPlayerId, myRole, onAction }: Night
           <Button
             key={player.id}
             variant="ghost"
-            onClick={() => onAction(player.id)}
+            onClick={() => {
+              setSelectedId(player.id)
+              onAction(player.id)
+            }}
           >
             {player.name}
           </Button>
