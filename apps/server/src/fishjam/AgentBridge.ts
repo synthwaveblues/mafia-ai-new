@@ -278,6 +278,11 @@ export class AgentBridge {
   }
 
   afterNarratorFinishes(fn: () => void) {
+    if (!this.narratorSpeaking) {
+      this.log('narrator', 'Already idle — firing transition immediately')
+      setTimeout(fn, 100)
+      return
+    }
     this.pendingPhaseTransition = fn
     this.pendingPhaseTimeout = setTimeout(() => {
       if (this.pendingPhaseTransition === fn) {
