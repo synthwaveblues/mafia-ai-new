@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useConnection, usePeers, useCamera, useMicrophone, useInitializeDevices } from '@fishjam-cloud/react-client'
-import { useGameStore, useGameSocket, useFaceAnalysis } from '@/entities/game'
+import { useGameStore, useGameSocket, useFaceAnalysis, useAudioPipeline } from '@/entities/game'
 import { RoleCard } from '@/entities/player'
 import { PhaseOverlay } from '@/widgets/phase-overlay'
 import { VideoGrid } from '@/widgets/video-grid'
@@ -25,7 +25,8 @@ export function RoomPage() {
   const navigate = useNavigate()
   const { playerId, playerName, myRole, gameState, fishjamToken, lastTranscript } = useGameStore()
   const isNarratorSpeaking = useGameStore((s) => s.isNarratorSpeaking)
-  const { send } = useGameSocket()
+  const { send, wsRef, setOnBinary } = useGameSocket()
+  const { playAudio } = useAudioPipeline(wsRef)
   const { metrics: faceMetrics, setVideoElement, startAnalysis, stopAnalysis, onMetrics } = useFaceAnalysis()
 
   // Fishjam hooks
@@ -37,6 +38,11 @@ export function RoomPage() {
 
   const fishjamJoinInitiated = useRef(false)
   const autoMutedRef = useRef(false)
+
+  // Register WebSocket binary handler for Game Master audio
+  useEffect(() => {
+    setOnBinary(playAudio)
+  }, [setOnBinary, playAudio])
 
   // Auto-mute mic during phases where players cannot talk to each other
   useEffect(() => {
