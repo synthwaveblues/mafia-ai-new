@@ -1,94 +1,122 @@
-# Mafia AI — Progress & Known Issues
+# Mafia AI — Progress
 
-_Last updated: 2026-03-23_
-
----
-
-## Implemented ✓
-
-### Step 1 — Lobby
-- Players join room, host starts game ✅
-- `+ Add Voice Agent` (Alex) joins as Fishjam audio participant ✅
-- `+ Add 3 AI Bots` button **removed** — bots replaced by AI Voice Agents ✅
-- `BotAgent.ts` deleted, all bot artifacts cleaned up (BotAgent, botNames, botAgents, useBotTTS, pendingBotSpeech, bot_speech, tts.ts) ✅
-- `StartButton` requires min. 4 players (client + server) ✅
-- Role count formula: `Math.floor(n/4)` mafia, 1 detective, 1 doctor, rest civilian ✅
-
-### Step 2 — Role Assignment (`role_assignment`)
-- Roles assigned randomly, sent privately to each player ✅
-- `ROLE_REVEAL_DELAY` (3s dev / 5s prod) before narrator starts ✅
-- No timer shown during `role_assignment` ✅
-- Narrator silent ✅
-- **Auto-mute mic** on `role_assignment` entry, auto-unmute on exit ✅
-- Role summary log: `[Game:X][roles] Alice=mafia, Bob=detective, ...` ✅
-
-### Step 3 — Narrator speaks (transition → Night)
-- `phase_changed` to `night` → `isNarratorSpeaking = true` → timer FROZEN ✅
-- Narrator announces night, describes town falling asleep ✅
-- `transcript_clear` (turnComplete) → `isNarratorSpeaking = false` → timer STARTS ✅
-- Safety fallback: timer unfreezes after 30s if turnComplete never fires ✅
-
-### Step 4 — Night (`night`)
-- Timer starts AFTER narrator finishes (fixed: was firing immediately) ✅
-- `NightPanel` UI: mafia/detective/doctor see player list, civilian sees "wait" message ✅
-- Players cannot target themselves ✅
-- After selecting target: "Action submitted — waiting for dawn..." confirmation ✅
-- Night actions via voice (Gemini tool calls: `night_kill`, `investigate`, `doctor_save`, `resolve_night`) ✅
-- Night actions via UI (`night_action` WS event → `handleNightAction()`) ✅
-- `checkAllNightActionsComplete()` — resolves night early if all roles acted ✅
-- Timer fallback: `resolveNight()` fires after 45s/90s if not all roles acted ✅
-
-### Step 5 — Night resolution + Narrator speaks (transition → Day or Game Over)
-- `resolveNight()` fully implemented:
-  - Mafia kill: majority vote, random on tie ✅
-  - Doctor blocks kill if same target ✅
-  - Detective gets investigation result (even if target killed this turn) ✅
-  - Win condition checked after night ✅
-- `startDay()` now has `doctorSaved` param → narrator knows to mention the save ✅
-- If mafia wins after night → `endGame()` → narrator announces, goes to `game_over` ✅
-
-### Steps 6–10 (Day, Voting, Game Over)
-- Day discussion, voting, game over phases were already working from before ✅
-- Post-voting elimination and win condition check working ✅
+_Based on CONVENTIONS.md. Nothing verified yet — test each step before checking off._
 
 ---
 
-## ⚠️ NOT YET TESTED
+## Step 1 — Lobby
 
-All changes from this session are written but **not verified in a real running game**. The following need to be tested:
-
-- Auto-mute/unmute mic on `role_assignment` ↔ other phases
-- Night timer starts only AFTER narrator finishes (not immediately)
-- NightPanel shows correct UI per role
-- Mafia kill → correct player eliminated next day
-- Doctor save → narrator mentions the save
-- Detective investigation result appears in client UI
-- `checkAllNightActionsComplete()` triggers early resolution correctly
-- Night fallback timer (45s) fires if nobody acts
-- Win condition after night (mafia ≥ civilians → game_over, no day phase)
-- No regressions in day / voting / game_over flow
+- ☐ Players join room (WebSocket `join_room`)
+- ☐ `+ Add Voice Agent` button adds a voice agent to the Fishjam room
+- ☐ `Start Game` button disabled until 4 players present
+- ☐ Players can talk to each other in lobby (mic live)
+- ☐ Timer: not shown
+- ☐ Narrator: silent
 
 ---
 
-## Known issues still open 🐛
+## Step 2 — Role Assignment (`role_assignment`)
 
-- **Safety timer stacking** — `narratorSafetyTimer` in `socket.ts` may stack across phase changes if not cancelled properly. Check whether existing cancellation logic is sufficient.
-- **`<ctrl46>` artifacts** — Gemini tool call batches produce silent transcript events during day. Filtered client-side but cosmetically noisy.
-- **VoiceAgent night tools** — VoiceAgent (Alex) only has `cast_vote` tool. If Alex is mafia/detective/doctor, he can't call `night_kill`/`investigate`/`doctor_save`. Night tool support for VoiceAgent not yet added.
+- ☐ Roles assigned: `Math.floor(n/4)` mafia, 1 detective, 1 doctor, rest civilian
+- ☐ Each player receives their role privately
+- ☐ Mic auto-muted on entry, auto-unmuted on exit
+- ☐ Delay ~3s (dev) / ~5s (prod) before narrator begins
+- ☐ Timer: not shown
+- ☐ Narrator: silent
 
 ---
 
-## Remaining game steps to implement 📋
+## Step 3 — Narrator speaks (transition → Night)
 
-| Step | Phase | Status |
-|------|-------|--------|
-| 6 | Day (`day`) | ✅ implemented (needs regression test) |
-| 7 | Narrator speaks (transition → Voting) | ✅ implemented (needs regression test) |
-| 8 | Voting (`voting`) | ✅ implemented (needs regression test) |
-| 9 | Elimination resolution + Narrator (→ Night or Game Over) | ✅ implemented (needs regression test) |
-| 10 | Game Over (`game_over`) | ✅ implemented (needs regression test) |
+- ☐ `phase_changed` night → `isNarratorSpeaking = true` → timer FROZEN
+- ☐ Narrator speaks: announces night, town falls asleep (2–3 sentences)
+- ☐ `turnComplete` fires → `isNarratorSpeaking = false` → timer starts
+- ☐ Safety fallback: timer unfreezes after 15s if `turnComplete` never fires
+- ☐ Players cannot talk (mic muted or blocked)
 
-### Features still missing (from CONVENTIONS.md Known Limitations)
-- Gray tile / visual indicator for eliminated players (`VideoGrid.tsx`)
-- Eliminated players cannot vote or act (needs guard in `castVote` / `handleNightAction`)
-- 4 players minimum guard on `StartButton` is client-only — server already enforces it
+---
+
+## Step 4 — Night (`night`)
+
+- ☐ Timer starts ONLY after narrator finishes (not on `phase_changed`)
+- ☐ Timer duration: 45s dev / 90s prod
+- ☐ NightPanel shows correct action per role (mafia: kill, detective: investigate, doctor: save, civilian: wait)
+- ☐ No player can target themselves
+- ☐ After selecting target: confirmation shown
+- ☐ `checkAllNightActionsComplete()` resolves night early if all special roles acted
+- ☐ Timer fallback: `resolveNight()` after 45s/90s if not all acted
+
+---
+
+## Step 5 — Night resolution + Narrator speaks (→ Day or Game Over)
+
+- ☐ `resolveNight()` applies mafia kill (majority vote, random on tie)
+- ☐ Doctor blocks kill if same target chosen
+- ☐ Detective gets investigation result (even if target killed same turn)
+- ☐ Win condition checked: mafia ≥ civilians → Game Over
+- ☐ Narrator speaks AFTER resolution (knows the result)
+- ☐ Timer FROZEN while narrator speaks
+- ☐ If game continues: narrator announces kill or save (2–3 sentences) → Day
+- ☐ If mafia wins: narrator announces → Game Over
+
+---
+
+## Step 6 — Day (`day`)
+
+- ☐ Timer starts ONLY after narrator finishes
+- ☐ Timer duration: 80s dev / 120s prod
+- ☐ Players discuss freely (mic live)
+- ☐ Narrator silent during discussion
+- ☐ If silence > 5s: narrator drops a suspicion hint
+- ☐ Timer expires → voting starts automatically
+
+---
+
+## Step 7 — Narrator speaks (transition → Voting)
+
+- ☐ Timer FROZEN while narrator speaks
+- ☐ Narrator announces voting, calls each player by name
+- ☐ Players cannot talk (mic muted or blocked)
+- ☐ `turnComplete` → timer starts
+
+---
+
+## Step 8 — Voting (`voting`)
+
+- ☐ Timer starts ONLY after narrator finishes
+- ☐ Timer duration: 40s dev / 60s prod
+- ☐ Players vote by clicking a player tile
+- ☐ Players can talk during voting
+- ☐ All votes cast → `resolveVotes()` immediately
+- ☐ Timer expires → `resolveVotes()` automatically
+- ☐ Tie → random among tied players
+
+---
+
+## Step 9 — Elimination resolution + Narrator speaks (→ Night or Game Over)
+
+- ☐ `resolveVotes()` eliminates player (or nobody if no votes)
+- ☐ Win condition checked: mafia ≥ civilians OR all mafia dead
+- ☐ Narrator speaks AFTER resolution
+- ☐ Timer FROZEN while narrator speaks
+- ☐ If game continues: narrator announces elimination + night intro → Night
+- ☐ If game over: narrator announces → Game Over
+- ☐ Eliminated player shown with gray tile in VideoGrid
+
+---
+
+## Step 10 — Game Over (`game_over`)
+
+- ☐ Narrator announces winner dramatically
+- ☐ Timer: not shown
+- ☐ Narrator responds if players speak to them
+
+---
+
+## Audio / Tech invariants
+
+- ☐ GameMaster bridge only forwards audio from human peers (whitelist)
+- ☐ VoiceAgent bridge only forwards audio from human peers (whitelist)
+- ☐ No 1008 Policy Violation during normal gameplay
+- ☐ `turnComplete` fires reliably after each narrator speech
+- ☐ Narrator never interrupted mid-sentence by a server timeout
