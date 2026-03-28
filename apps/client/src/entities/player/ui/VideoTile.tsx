@@ -25,8 +25,7 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
     return () => { video.srcObject = null }
   }, [stream])
 
-  const isNight = phase === 'night'
-  const isBlurred = phase === 'night' || phase === 'role_assignment'
+  const isBlurred = isDead || phase === 'night' || phase === 'role_assignment'
   const isStressed = stressLevel > 0.3 && !isDead
   const isHighStress = stressLevel > 0.6 && !isDead
 
@@ -49,17 +48,12 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
           autoPlay
           playsInline
           muted={isYou || isMuted}
-          className={`w-full h-full object-cover transition-all duration-700 ${isDead ? 'grayscale brightness-50' : ''} ${isBlurred && !isDead ? 'blur-sm' : ''} ${isNight && !isDead ? 'brightness-[0.4] saturate-50' : ''}`}
+          className={`w-full h-full object-cover transition-all duration-700 ${isDead ? 'grayscale brightness-50' : ''} ${isBlurred ? 'blur-sm' : ''}`}
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-[2.5rem]">
           {isDead ? '💀' : '🎭'}
         </div>
-      )}
-
-      {/* Night overlay tint — only on actual night, not role_assignment */}
-      {isNight && !isDead && (
-        <div className="absolute inset-0 bg-blue-950/40 pointer-events-none transition-opacity duration-700" />
       )}
 
       {/* Death overlay */}
