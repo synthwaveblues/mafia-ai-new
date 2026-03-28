@@ -46,6 +46,14 @@ export async function handleClientEvent(
         cleanupTimers.delete(event.roomId)
       }
 
+      // Block joining a room where the game is already in progress
+      const existingGame = games.get(event.roomId)
+      const isSpectator = playerName.startsWith('📺')
+      if (existingGame && existingGame.phase !== 'lobby' && !isSpectator) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Game already started. You cannot join a room in progress.' }))
+        return
+      }
+
       const game = getOrCreateGame(event.roomId)
       const playerId = crypto.randomUUID()
       ws.data.playerId = playerId
