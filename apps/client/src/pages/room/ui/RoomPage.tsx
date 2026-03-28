@@ -25,6 +25,7 @@ export function RoomPage() {
   const navigate = useNavigate()
   const { playerId, playerName, myRole, gameState, fishjamToken, lastTranscript } = useGameStore()
   const isNarratorSpeaking = useGameStore((s) => s.isNarratorSpeaking)
+  const investigationResult = useGameStore((s) => s.investigationResult)
   const { send, wsRef, setOnBinary } = useGameSocket()
   const { playAudio } = useAudioPipeline(wsRef)
   const { metrics: faceMetrics, setVideoElement, startAnalysis, stopAnalysis, onMetrics } = useFaceAnalysis()
@@ -260,9 +261,22 @@ export function RoomPage() {
           <AiAnalysis />
         )}
 
-        {/* Night panel */}
-        {isNight && isAlive && (
+        {/* Night panel — shown only after narrator finishes speaking */}
+        {isNight && isAlive && !isNarratorSpeaking && (
           <NightPanel />
+        )}
+
+        {/* Detective investigation result */}
+        {myRole === 'detective' && investigationResult && (
+          <div className="mb-5 p-4 bg-[#1a1a2e] rounded-xl border-2 border-purple-700 text-center">
+            <p className="text-purple-300 text-xs font-bold uppercase tracking-wider mb-1">Investigation Result</p>
+            <p className="text-white text-sm">
+              <span className="font-bold">{investigationResult.targetName}</span> is{' '}
+              <span className={`font-bold ${investigationResult.targetRole === 'mafia' ? 'text-red-400' : 'text-green-400'}`}>
+                {investigationResult.targetRole}
+              </span>
+            </p>
+          </div>
         )}
 
         {/* Lobby: add bots + start */}
