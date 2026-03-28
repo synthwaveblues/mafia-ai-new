@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 
 interface VideoTileProps {
   stream: MediaStream | null | undefined
@@ -17,18 +17,20 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animRef = useRef<number>(0)
+  const [canvasWorking, setCanvasWorking] = useState(false)
+  const hasEffects = (stressLevel > 0.3 && !isDead) || (phase === 'night' && !isDead) || isDead
 
-  // Attach raw stream to hidden video element
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream
-    }
+    const video = videoRef.current
+    if (!video || !stream) return
+    video.srcObject = stream
+    // Ensure playback starts — required for canvas.drawImage to work
+    video.play().catch(() => {})
     return () => {
-      if (videoRef.current) videoRef.current.srcObject = null
+      video.srcObject = null
     }
   }, [stream])
 
-  // Canvas render loop — draws video + effects each frame
   const renderFrame = useCallback(() => {
     const canvas = canvasRef.current
     const video = videoRef.current
@@ -40,7 +42,6 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Match canvas size to video
     if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
       canvas.width = video.videoWidth || 320
       canvas.height = video.videoHeight || 240
@@ -49,10 +50,9 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
     const w = canvas.width
     const h = canvas.height
 
-    // 1. Draw base video
     ctx.drawImage(video, 0, 0, w, h)
+    if (!canvasWorking) setCanvasWorking(true)
 
-    // 2. Death: grayscale + darken
     if (isDead) {
       const imageData = ctx.getImageData(0, 0, w, h)
       const d = imageData.data
@@ -65,13 +65,11 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
       ctx.fillStyle = '#000'
       ctx.fillRect(0, 0, w, h)
       ctx.globalAlpha = 1
-      // Skull
       ctx.font = `${Math.min(w, h) * 0.3}px serif`
       ctx.textAlign = 'center'
       ctx.fillText('💀', w / 2, h / 2 + 10)
     }
 
-    // 3. Night tint
     if (phase === 'night' && !isDead) {
       ctx.globalAlpha = 0.3
       ctx.fillStyle = '#050520'
@@ -79,19 +77,15 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
       ctx.globalAlpha = 1
     }
 
-    // 4. Stress effects
     if (stressLevel > 0.3 && !isDead) {
       const intensity = Math.min(1, (stressLevel - 0.3) / 0.7)
       const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7
-
-      // Red vignette
       const gradient = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.55)
       gradient.addColorStop(0, 'transparent')
       gradient.addColorStop(1, `rgba(220, 38, 38, ${intensity * 0.35 * pulse})`)
       ctx.fillStyle = gradient
       ctx.fillRect(0, 0, w, h)
 
-      // Emoji
       const emoji = stressLevel > 0.6 ? '😱' : '😰'
       const size = 20 + intensity * 14
       const bounce = Math.sin(Date.now() / 200) * 3
@@ -103,7 +97,6 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
       ctx.shadowBlur = 0
     }
 
-    // 5. Speaking glow border
     if (isSpeaking && !isDead) {
       ctx.strokeStyle = 'rgba(74, 222, 128, 0.8)'
       ctx.lineWidth = 4
@@ -111,15 +104,14 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
     }
 
     animRef.current = requestAnimationFrame(renderFrame)
-  }, [isDead, stressLevel, phase, isSpeaking])
+  }, [isDead, stressLevel, phase, isSpeaking, canvasWorking])
 
-  // Start/stop render loop
   useEffect(() => {
-    if (stream) {
+    if (stream && hasEffects) {
       animRef.current = requestAnimationFrame(renderFrame)
     }
     return () => cancelAnimationFrame(animRef.current)
-  }, [stream, renderFrame])
+  }, [stream, hasEffects, renderFrame])
 
   function getBorderStyle() {
     if (isDead) return 'border-[#444]'
@@ -130,34 +122,43 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
     return 'border-[#333]'
   }
 
-  const borderColor = getBorderStyle()
+  // Show canvas only when effects are active AND canvas is actually rendering
+  const useCanvas = hasEffects && canvasWorking
 
   return (
-    <div className={`relative rounded-xl overflow-hidden bg-[#1a1a2e] aspect-[4/3] border-2 transition-all duration-300 ${borderColor} ${isDead ? 'opacity-60' : ''}`}>
-      {/* Hidden video element — source for canvas */}
-      {stream && (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isYou || isMuted}
-          className="hidden"
-        />
-      )}
-
-      {/* Canvas with real-time effects */}
+    <div className={`relative rounded-xl overflow-hidden bg-[#1a1a2e] aspect-[4/3] border-2 transition-all duration-300 ${getBorderStyle()} ${isDead ? 'opacity-60' : ''}`}>
       {stream ? (
-        <canvas
-          ref={canvasRef}
-          className="w-full h-full object-cover"
-        />
+        <>
+          {/* Video element — always visible as fallback, hidden only when canvas takes over */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted={isYou || isMuted}
+            className={`w-full h-full object-cover ${useCanvas ? 'absolute opacity-0 pointer-events-none' : ''} ${isDead && !useCanvas ? 'grayscale' : ''}`}
+          />
+          {/* Canvas with effects — only shown when effects are needed and working */}
+          {hasEffects && (
+            <canvas
+              ref={canvasRef}
+              className={`w-full h-full object-cover ${useCanvas ? '' : 'absolute opacity-0 pointer-events-none'}`}
+            />
+          )}
+        </>
       ) : (
         <div className="w-full h-full flex items-center justify-center text-[2.5rem]">
           {isDead ? '💀' : '🎭'}
         </div>
       )}
 
-      {/* Bottom overlay: transcript → suspicion bar → name */}
+      {/* Stress emoji HTML fallback — shown when canvas is not active */}
+      {stressLevel > 0.3 && !isDead && !useCanvas && (
+        <div className="absolute top-1 right-1 text-lg animate-bounce drop-shadow-[0_0_6px_rgba(239,68,68,0.8)]">
+          {stressLevel > 0.6 ? '😱' : '😰'}
+        </div>
+      )}
+
+      {/* Bottom overlay */}
       <div className="absolute bottom-0 left-0 right-0 flex flex-col">
         {transcript && !isDead && (
           <div className="px-2 pb-1">
