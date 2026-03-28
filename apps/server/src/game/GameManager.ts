@@ -543,6 +543,7 @@ export class GameManager {
       },
 
       onToolCall: (name, args) => {
+        this.log('GM', `Tool call from Gemini: ${name}(${JSON.stringify(args)})`)
         this.handleGeminiCommand({ action: name, ...args } as any)
       },
     })
@@ -1339,9 +1340,21 @@ export class GameManager {
     }
   }
 
+  private playerAudioChunks = 0
   sendPlayerAudio(chunk: Buffer) {
-    // Forward player mic audio directly to Gemini (bypasses Fishjam SFU for reliability)
-    this.bridge?.sendPlayerAudioDirect(chunk)
+    this.playerAudioChunks++
+    if (!this.bridge) {
+      if (this.playerAudioChunks % 200 === 0)
+        this.log('playerAudio', `DROP: bridge=null (chunks received: ${this.playerAudioChunks})`)
+      return
+    }
+    if (this.playerAudioChunks === 1) {
+      this.log('playerAudio', `First audio chunk from player: ${chunk.length}b — forwarding to Gemini`)
+    }
+    if (this.playerAudioChunks % 500 === 0) {
+      this.log('playerAudio', `chunks=${this.playerAudioChunks}, bridge.narratorSpeaking=${this.bridge.isNarratorSpeaking()}, phase=${this.state.phase}`)
+    }
+    this.bridge.sendPlayerAudioDirect(chunk)
   }
 
   private eliminatePlayer(playerId: string) {

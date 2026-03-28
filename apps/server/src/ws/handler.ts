@@ -26,6 +26,7 @@ export async function handleClientEvent(
   ws: ServerWebSocket<{ playerId: string }>,
   event: ClientEvent
 ) {
+  console.log(`[WS] ClientEvent: type=${event.type} playerId=${ws.data.playerId}`, event.type !== 'face_metrics' ? JSON.stringify(event).slice(0, 200) : '(face_metrics)')
   switch (event.type) {
     case 'join_room': {
       // Validate player name

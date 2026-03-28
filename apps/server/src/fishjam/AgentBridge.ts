@@ -326,6 +326,10 @@ export class AgentBridge {
     return (energy / int16.length) > 50
   }
 
+  isNarratorSpeaking(): boolean {
+    return this.narratorSpeaking
+  }
+
   allowPeer(peerId: string) {
     if (!this.allowedPeerIds) this.allowedPeerIds = new Set()
     this.allowedPeerIds.add(peerId)
@@ -383,17 +387,17 @@ export class AgentBridge {
   // Forward player audio directly to Gemini (bypass Fishjam SFU)
   private directAudioCount = 0
   sendPlayerAudioDirect(pcm16: Buffer) {
+    this.directAudioCount++
     if (!this.geminiSession) {
-      if (this.directAudioCount % 200 === 0) this.log('directAudio', 'WARNING: No Gemini session — audio dropped')
-      this.directAudioCount++
+      if (this.directAudioCount % 200 === 0)
+        this.log('directAudio', `DROP: no Gemini session (chunks=${this.directAudioCount})`)
       return
     }
-    this.directAudioCount++
     if (this.directAudioCount === 1) {
       this.log('directAudio', `First direct audio chunk: ${pcm16.length}b — pipeline active`)
     }
     if (this.directAudioCount % 500 === 0) {
-      this.log('directAudio', `chunks sent: ${this.directAudioCount}`)
+      this.log('directAudio', `OK: chunks=${this.directAudioCount} narratorSpeaking=${this.narratorSpeaking} session=alive`)
     }
     this.geminiSession.sendRealtimeInput({
       audio: {
