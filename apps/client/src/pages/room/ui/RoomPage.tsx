@@ -69,32 +69,28 @@ export function RoomPage() {
     }
   }, [roomId, playerName, playerId, send])
 
-  // Join Fishjam room when token is received
+  // Join Fishjam room when token is received — only re-run when token changes
   useEffect(() => {
-    if (fishjamToken && peerStatus === 'idle' && !fishjamJoinInitiated.current) {
-      fishjamJoinInitiated.current = true
+    if (!fishjamToken || fishjamJoinInitiated.current) return
+    fishjamJoinInitiated.current = true
 
-      initializeDevices({})
-        .then(() =>
-          joinRoom({
-            peerToken: fishjamToken,
-            peerMetadata: { name: playerName },
-          })
-        )
-        .then(() => {
-          startCamera()
-          startMicrophone() // Audio goes through Fishjam SFU → Agent → Gemini
+    initializeDevices({})
+      .then(() =>
+        joinRoom({
+          peerToken: fishjamToken,
+          peerMetadata: { name: playerName },
         })
-        .catch((err) => {
-          console.error('Fishjam setup failed:', err)
-          fishjamJoinInitiated.current = false
-        })
-    }
-
-    return () => {
-      console.log('Fishjam effect cleanup')
-    }
-  }, [fishjamToken, peerStatus, playerName, joinRoom, initializeDevices, startCamera, startMicrophone])
+      )
+      .then(() => {
+        startCamera()
+        startMicrophone()
+      })
+      .catch((err) => {
+        console.error('Fishjam setup failed:', err)
+        fishjamJoinInitiated.current = false
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fishjamToken])
 
   // Audio now goes through Fishjam Agent — no manual mic/playback needed
 

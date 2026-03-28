@@ -37,7 +37,7 @@ export class AgentBridge {
   private narratorStartedAt: number = 0
   private pendingPhaseTransition: (() => void) | null = null
   private pendingPhaseTimeout: ReturnType<typeof setTimeout> | null = null
-  private readonly PENDING_PHASE_TIMEOUT_MS = 5000
+  private readonly PENDING_PHASE_TIMEOUT_MS = 30000
 
   // Fix: log is stored as an instance method via makeLog
   private log: (tag: string, ...args: unknown[]) => void
@@ -171,14 +171,29 @@ export class AgentBridge {
     this.log('start', 'Audio bridge active')
   }
 
+  private audioChunkCount = 0
+  private lastAudioLogAt = 0
+
   private handleGeminiMessage(msg: any) {
     const parts = msg.serverContent?.modelTurn?.parts
 
-    if (!this.muteOutput && parts && this.agent && this.agentTrackId) {
+    if (parts) {
       for (const part of parts) {
         if (part.inlineData?.data) {
+          this.audioChunkCount++
           const pcmData = Buffer.from(part.inlineData.data, 'base64')
-          this.agent.sendData(this.agentTrackId as any, pcmData)
+          const now = Date.now()
+          if (this.audioChunkCount === 1 || now - this.lastAudioLogAt > 3000) {
+            this.log('audio', `chunk #${this.audioChunkCount} — ${pcmData.length}b, muteOutput=${this.muteOutput}`)
+            this.lastAudioLogAt = now
+          }
+          if (!this.muteOutput && this.agent && this.agentTrackId) {
+            this.agent.sendData(this.agentTrackId as any, pcmData)
+          }
+        } else if (part.text !== undefined) {
+          // text part — expected for native audio transcript fallback, skip silently
+        } else {
+          this.log('audio', `unexpected part keys: ${Object.keys(part).join(', ')}`)
         }
       }
     }

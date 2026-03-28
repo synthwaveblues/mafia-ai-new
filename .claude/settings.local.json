@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(bunx tsc:*)",
-      "Bash(grep -r \"night_kill\\\\|night_action\\\\|investigate\\\\|doctor_save\" /d/repos/mafia-ai/apps --include=*.ts --include=*.tsx)"
+      "Bash(grep -r \"night_kill\\\\|night_action\\\\|investigate\\\\|doctor_save\" /d/repos/mafia-ai/apps --include=*.ts --include=*.tsx)",
+      "Bash(ls D:/repos/mafia-ai/*.log)",
+      "Bash(find /d/repos/mafia-ai/apps/server/node_modules/@google/genai -name *.d.ts)",
+      "Bash(grep -r \"onmessage\\\\|LiveConnectConfig\\\\|Session \" /d/repos/mafia-ai/apps/server/node_modules/@google/genai/dist/*.d.ts)"
     ]
   }
 }
