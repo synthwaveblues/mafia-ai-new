@@ -33,7 +33,7 @@ export function RoomPage() {
   const { joinRoom, peerStatus } = useConnection()
   const { localPeer, remotePeers } = usePeers()
   const { startCamera } = useCamera()
-  const { startMicrophone } = useMicrophone()
+  const { startMicrophone, toggleMicrophoneMute, isMicrophoneMuted } = useMicrophone()
   const { initializeDevices } = useInitializeDevices()
 
   const fishjamJoinInitiated = useRef(false)
@@ -209,10 +209,16 @@ export function RoomPage() {
                   </div>
                 )}
               </div>
-              <span className="flex items-center gap-1 text-[10px] text-green-400">
-                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                LIVE via Fishjam
-              </span>
+              <button
+                onClick={() => toggleMicrophoneMute()}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs transition-all duration-200 ${
+                  isMicrophoneMuted
+                    ? 'bg-red-600/80 hover:bg-red-600 text-white'
+                    : 'bg-green-600/80 hover:bg-green-600 text-white animate-pulse'
+                }`}
+              >
+                {isMicrophoneMuted ? 'MIC OFF' : 'LIVE'}
+              </button>
             </div>
           </div>
         )}

@@ -77,8 +77,8 @@ export function useAudioPipeline(wsRef: React.RefObject<WebSocket | null>) {
   const micCtxRef = useRef<AudioContext | null>(null)
   const micProcessorRef = useRef<ScriptProcessorNode | null>(null)
   const isCapturing = useRef(false)
-  const [isMuted, setIsMuted] = useState(false)
-  const isMutedRef = useRef(false)
+  const [isMuted, setIsMuted] = useState(true)
+  const isMutedRef = useRef(true)
 
   useEffect(() => {
     isMutedRef.current = isMuted
