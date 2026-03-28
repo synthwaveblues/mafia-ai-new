@@ -44,7 +44,7 @@ export type ServerEvent =
   | { type: 'speaker_changed'; speakerId: string | null }
   | { type: 'game_over'; winner: 'mafia' | 'civilians'; state: GameState }
   | { type: 'night_action_prompt'; role: Role }
-  | { type: 'night_action_received' }
+  | { type: 'night_action_received'; targetName?: string }
   | { type: 'investigation_result'; targetName: string; targetRole: Role }
   | { type: 'transcript'; speaker: 'gemini' | 'player'; text: string; playerName?: string }
   | { type: 'transcript_clear' }

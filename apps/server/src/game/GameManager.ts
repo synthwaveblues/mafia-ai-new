@@ -564,8 +564,9 @@ export class GameManager {
 
     if (player.role === 'mafia') {
       this.mafiaVotes.set(playerId, targetId)
-      this.closeNightActionWindow(playerId)
-      // When all human mafia have voted, give 5s grace period for detective/doctor to act
+      this.closeNightActionWindow(playerId, target.name)
+      this.log('night', `Mafia ${player.name} chose ${target.name}`)
+      this.bridge?.sendText(`[SYSTEM] ${player.role} chose ${target.name}. Say briefly: "${target.name}. Noted." — nothing else.`)
       const humanMafia = this.state.players.filter((p) => p.role === 'mafia' && p.status === 'alive' && !this.isBot(p.name))
       if (humanMafia.every((p) => this.mafiaVotes.has(p.id)) && !this.mafiaGraceTimer) {
         this.mafiaGraceTimer = setTimeout(() => {
@@ -578,10 +579,14 @@ export class GameManager {
       }
     } else if (player.role === 'detective' && this.detectiveTarget === null) {
       this.detectiveTarget = targetId
-      this.closeNightActionWindow(playerId)
+      this.closeNightActionWindow(playerId, target.name)
+      this.log('night', `Detective ${player.name} investigating ${target.name}`)
+      this.bridge?.sendText(`[SYSTEM] Detective chose ${target.name}. Say briefly: "Investigating ${target.name}. Noted." — nothing else.`)
     } else if (player.role === 'doctor' && this.doctorTarget === null) {
       this.doctorTarget = targetId
-      this.closeNightActionWindow(playerId)
+      this.closeNightActionWindow(playerId, target.name)
+      this.log('night', `Doctor ${player.name} protecting ${target.name}`)
+      this.bridge?.sendText(`[SYSTEM] Doctor chose ${target.name}. Say briefly: "Protecting ${target.name}. Noted." — nothing else.`)
     }
 
     this.checkAllNightActionsComplete()
@@ -722,8 +727,11 @@ export class GameManager {
         if (!voter || !target || this.state.phase !== 'voting') break
         this.votes.set(voter.id, target.id)
         this.broadcastEvent({ type: 'vote_cast', fromId: voter.id, targetId: target.id })
+        this.log('voting', `${voter.name} voted for ${target.name}`)
 
-        // Fix (from main): count bots + connected humans, not just alive players
+        // Instant voice confirmation
+        this.bridge?.sendText(`[SYSTEM] ${voter.name} voted for ${target.name}. Say: "${voter.name} votes for ${target.name}. Noted." Then continue to the next player.`)
+
         const eligibleVoters = this.state.players.filter((p) => p.status === 'alive' && (p.isConnected || this.isBot(p.name)))
         if (this.votes.size >= eligibleVoters.length) {
           this.resolveVotes()
@@ -805,7 +813,7 @@ export class GameManager {
           if (actor.role === 'mafia') this.mafiaVotes.set(actor.id, mentioned.id)
           else if (actor.role === 'detective') this.detectiveTarget = mentioned.id
           else if (actor.role === 'doctor') this.doctorTarget = mentioned.id
-          this.closeNightActionWindow(actor.id)
+          this.closeNightActionWindow(actor.id, mentioned.name)
           this.broadcastEvent({ type: 'transcript', speaker: 'gemini', text: `${mentioned.name}. Confirmed.` })
           this.bridge?.sendText(`[SYSTEM] ${actor.role} chose ${mentioned.name}. Say out loud: "${mentioned.name}. Noted." Then call resolve_night if all roles have acted, otherwise stay silent.`)
           this.checkAllNightActionsComplete()
@@ -829,7 +837,9 @@ export class GameManager {
           if (this.votes.has(voter.id)) return
           this.votes.set(voter.id, mentioned.id)
           this.broadcastEvent({ type: 'vote_cast', fromId: voter.id, targetId: mentioned.id })
-          this.broadcastEvent({ type: 'transcript', speaker: 'gemini', text: `${voter.name} votes for ${mentioned.name}.` })
+          this.broadcastEvent({ type: 'transcript', speaker: 'gemini', text: `${voter.name} votes for ${mentioned.name}. Noted.` })
+          this.log('voting', `Voice fallback: ${voter.name} → ${mentioned.name}`)
+          this.bridge?.sendText(`[SYSTEM] ${voter.name} voted for ${mentioned.name}. Say: "Noted." Then move to the next player.`)
           const eligibleVoters = this.state.players.filter((p) => p.status === 'alive' && (p.isConnected || this.isBot(p.name)))
           if (this.votes.size >= eligibleVoters.length) this.resolveVotes()
         }, 500)
@@ -1028,10 +1038,10 @@ export class GameManager {
     // The GM already has full instructions from the startNight() sendText call.
   }
 
-  private closeNightActionWindow(playerId: string) {
+  private closeNightActionWindow(playerId: string, targetName?: string) {
     if (!this.nightActionWindowPlayers.has(playerId)) return
     this.nightActionWindowPlayers.delete(playerId)
-    this.sendToPlayer(playerId, { type: 'night_action_received' })
+    this.sendToPlayer(playerId, { type: 'night_action_received', targetName })
   }
 
   private resolveNight() {

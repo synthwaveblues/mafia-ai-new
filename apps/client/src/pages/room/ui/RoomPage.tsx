@@ -152,7 +152,9 @@ export function RoomPage() {
 
         {(gameState.phase === 'day' || isVoting) && <AiAnalysis />}
 
-        {isNight && isAlive && !isNarratorSpeaking && <NightPanel />}
+        {isNight && isAlive && !isNarratorSpeaking && (
+          <NightPanel onAction={(targetId) => send({ type: 'night_action', targetId })} />
+        )}
 
         {myRole === 'detective' && investigationResult && (
           <InvestigationResultCard

@@ -98,6 +98,7 @@ export function useGameSocket() {
             if (msg.phase === 'night') {
               useGameStore.getState().setInvestigationResult(null)
               useGameStore.getState().setNightActionSubmitted(false)
+              useGameStore.getState().setNightActionTargetName(null)
             }
             // Close any open night action window when leaving night phase
             if (msg.phase !== 'night') useGameStore.getState().setNightActionWindowOpen(false)
@@ -151,6 +152,7 @@ export function useGameSocket() {
           case 'night_action_received': {
             useGameStore.getState().setNightActionWindowOpen(false)
             useGameStore.getState().setNightActionSubmitted(true)
+            if (msg.targetName) useGameStore.getState().setNightActionTargetName(msg.targetName)
             break
           }
           case 'investigation_result': {

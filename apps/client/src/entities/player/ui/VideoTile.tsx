@@ -40,6 +40,7 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
   }
 
   return (
+    <>
     <div className={`relative rounded-xl overflow-hidden bg-[#1a1a2e] aspect-[4/3] border-2 transition-all duration-700 ${getBorderStyle()} ${isDead ? 'opacity-50' : ''} ${isHighStress ? 'scale-110 z-10' : isStressed ? 'scale-105 z-10' : 'scale-100'}`}>
       {stream ? (
         <video
@@ -110,14 +111,6 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
 
       {/* Bottom overlay */}
       <div className="absolute bottom-0 left-0 right-0 flex flex-col">
-        {transcript && !isDead && (
-          <div className="px-2 pb-1">
-            <p className="text-[11px] text-white/90 bg-black/70 rounded px-2 py-1 leading-snug line-clamp-2">
-              {transcript}
-            </p>
-          </div>
-        )}
-
         {suspicion && suspicion.score > 0 && !isDead && (phase === 'day' || phase === 'voting') && (
           <div className="px-2 pb-1">
             <div className="flex items-center gap-1.5">
@@ -160,5 +153,15 @@ export function VideoTile({ stream, name, isDead, isYou, isMuted, suspicion, isS
         </div>
       </div>
     </div>
+
+    {/* Subtitles — below the video frame */}
+    {transcript && (
+      <div className="mt-1 px-1">
+        <p className="text-[11px] text-white/80 bg-black/50 rounded px-2 py-1 leading-snug line-clamp-2 text-center">
+          {transcript}
+        </p>
+      </div>
+    )}
+    </>
   )
 }
