@@ -91,7 +91,7 @@ export class AgentBridge {
 
     const sessionConfig: any = {
       responseModalities: [Modality.AUDIO],
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } }, languageCodes: ['en-US'] },
     }
     if (tools && tools.length > 0) {
       sessionConfig.tools = [{ functionDeclarations: tools }]
