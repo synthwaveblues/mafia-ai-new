@@ -1,76 +1,166 @@
-// @ts-nocheck — GPU shader functions use TypeGPU's 'use gpu' directive, type-checked by unplugin-typegpu, not tsc
-import { Suspense, useMemo } from 'react'
-import { useRoot, useConfigureContext, useFrame, useUniformValue } from '@typegpu/react'
-import tgpu, { d, std } from 'typegpu'
+import { useEffect, useRef, useState } from 'react'
 
-const darknessAccess = tgpu.accessor(d.f32)
-const timeAccess = tgpu.accessor(d.f32)
+/**
+ * Night overlay using raw WebGPU (no TypeGPU React hooks — they have alpha bugs).
+ * Renders a fullscreen dark blue vignette with breathing pulse.
+ */
 
-const fullscreenVertex = tgpu.vertexFn({
-  in: { vertexIndex: d.builtin.vertexIndex },
-  out: { outPos: d.builtin.position, uv: d.vec2f },
-})(({ vertexIndex }) => {
-  'use gpu'
-  const pos = [
-    d.vec2f(-1.0, 1.0), d.vec2f(-1.0, -1.0), d.vec2f(1.0, -1.0),
-    d.vec2f(-1.0, 1.0), d.vec2f(1.0, -1.0), d.vec2f(1.0, 1.0),
-  ]
-  const uv = [
-    d.vec2f(0.0, 1.0), d.vec2f(0.0, 0.0), d.vec2f(1.0, 0.0),
-    d.vec2f(0.0, 1.0), d.vec2f(1.0, 0.0), d.vec2f(1.0, 1.0),
-  ]
-  return { outPos: d.vec4f(pos[vertexIndex], 0.0, 1.0), uv: uv[vertexIndex] }
-})
+const WGSL_SHADER = /* wgsl */ `
+struct Uniforms {
+  darkness: f32,
+  time: f32,
+}
 
-const nightFragment = tgpu.fragmentFn({
-  in: { uv: d.vec2f },
-  out: d.vec4f,
-})(({ uv }) => {
-  'use gpu'
-  const dark = darknessAccess.$
-  const t = timeAccess.$
-  const nightColor = d.vec3f(0.03, 0.01, 0.12)
-  const center = uv - d.vec2f(0.5, 0.5)
-  const vignette = 1.0 - std.length(center) * 0.6
-  const pulse = std.sin(t * 0.8) * 0.03 + 1.0
-  const alpha = dark * (0.65 + 0.35 * (1.0 - vignette)) * pulse
-  return d.vec4f(nightColor * alpha, alpha)
-})
+@group(0) @binding(0) var<uniform> u: Uniforms;
 
-function NightScene({ darkness }: { darkness: number }) {
-  const root = useRoot()
-  const { canvasRefCallback, ctxRef } = useConfigureContext({
-    alphaMode: 'premultiplied',
-    autoResize: true,
-  })
+struct VsOut {
+  @builtin(position) pos: vec4f,
+  @location(0) uv: vec2f,
+}
 
-  const timeUniform = useUniformValue(d.f32, 0)
-  const darknessUniform = useUniformValue(d.f32, darkness)
+@vertex fn vs(@builtin(vertex_index) i: u32) -> VsOut {
+  var p = array<vec2f, 6>(
+    vec2f(-1, 1), vec2f(-1,-1), vec2f(1,-1),
+    vec2f(-1, 1), vec2f(1,-1), vec2f(1, 1),
+  );
+  var uv = array<vec2f, 6>(
+    vec2f(0,1), vec2f(0,0), vec2f(1,0),
+    vec2f(0,1), vec2f(1,0), vec2f(1,1),
+  );
+  var o: VsOut;
+  o.pos = vec4f(p[i], 0, 1);
+  o.uv = uv[i];
+  return o;
+}
 
-  const pipeline = useMemo(
-    () =>
-      root
-        .with(timeAccess, timeUniform)
-        .with(darknessAccess, darknessUniform)
-        .createRenderPipeline({
-          vertex: fullscreenVertex,
-          fragment: nightFragment,
-        }),
-    [root, timeUniform, darknessUniform]
-  )
+@fragment fn fs(v: VsOut) -> @location(0) vec4f {
+  let dark = u.darkness;
+  if (dark < 0.01) { return vec4f(0, 0, 0, 0); }
+  let nightColor = vec3f(0.03, 0.01, 0.12);
+  let center = v.uv - vec2f(0.5, 0.5);
+  let vignette = 1.0 - length(center) * 0.6;
+  let pulse = sin(u.time * 0.8) * 0.03 + 1.0;
+  let alpha = dark * (0.65 + 0.35 * (1.0 - vignette)) * pulse;
+  return vec4f(nightColor * alpha, alpha);
+}
+`
 
-  darknessUniform.value = darkness
+function NightCanvas({ darkness }: { darkness: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const rafRef = useRef<number>(0)
+  const gpuRef = useRef<{
+    device: GPUDevice
+    pipeline: GPURenderPipeline
+    uniformBuffer: GPUBuffer
+    bindGroup: GPUBindGroup
+    ctx: GPUCanvasContext
+  } | null>(null)
+  const startTime = useRef(performance.now())
 
-  useFrame(({ elapsedSeconds }) => {
-    const ctx = ctxRef.current
-    if (!ctx) return
-    timeUniform.value = elapsedSeconds
-    pipeline.withColorAttachment({ view: ctx }).draw(6)
-  })
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !navigator.gpu) return
+
+    let cancelled = false
+
+    async function init() {
+      const adapter = await navigator.gpu.requestAdapter()
+      if (!adapter || cancelled) return
+      const device = await adapter.requestDevice()
+      if (cancelled) return
+
+      const ctx = canvas!.getContext('webgpu')!
+      const format = navigator.gpu.getPreferredCanvasFormat()
+      ctx.configure({ device, format, alphaMode: 'premultiplied' })
+
+      const module = device.createShaderModule({ code: WGSL_SHADER })
+
+      const uniformBuffer = device.createBuffer({
+        size: 8, // 2 x f32
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      })
+
+      const bindGroupLayout = device.createBindGroupLayout({
+        entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }],
+      })
+
+      const bindGroup = device.createBindGroup({
+        layout: bindGroupLayout,
+        entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+      })
+
+      const pipeline = device.createRenderPipeline({
+        layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+        vertex: { module, entryPoint: 'vs' },
+        fragment: {
+          module,
+          entryPoint: 'fs',
+          targets: [{
+            format,
+            blend: {
+              color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+      })
+
+      gpuRef.current = { device, pipeline, uniformBuffer, bindGroup, ctx }
+    }
+
+    init()
+    return () => { cancelled = true }
+  }, [])
+
+  // Render loop
+  useEffect(() => {
+    function render() {
+      const gpu = gpuRef.current
+      const canvas = canvasRef.current
+      if (!gpu || !canvas) {
+        rafRef.current = requestAnimationFrame(render)
+        return
+      }
+
+      // Resize canvas to match display
+      const dpr = window.devicePixelRatio || 1
+      const w = Math.floor(canvas.clientWidth * dpr)
+      const h = Math.floor(canvas.clientHeight * dpr)
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+      }
+
+      const elapsed = (performance.now() - startTime.current) / 1000
+      const data = new Float32Array([darkness, elapsed])
+      gpu.device.queue.writeBuffer(gpu.uniformBuffer, 0, data)
+
+      const encoder = gpu.device.createCommandEncoder()
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: gpu.ctx.getCurrentTexture().createView(),
+          loadOp: 'clear',
+          storeOp: 'store',
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        }],
+      })
+      pass.setPipeline(gpu.pipeline)
+      pass.setBindGroup(0, gpu.bindGroup)
+      pass.draw(6)
+      pass.end()
+      gpu.device.queue.submit([encoder.finish()])
+
+      rafRef.current = requestAnimationFrame(render)
+    }
+
+    rafRef.current = requestAnimationFrame(render)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [darkness])
 
   return (
     <canvas
-      ref={canvasRefCallback}
+      ref={canvasRef}
       style={{
         position: 'fixed',
         inset: 0,
@@ -85,17 +175,14 @@ function NightScene({ darkness }: { darkness: number }) {
   )
 }
 
-interface NightShaderOverlayProps {
-  isNight: boolean
-}
+export function NightShaderOverlay({ isNight }: { isNight: boolean }) {
+  const [supported, setSupported] = useState(true)
 
-// GPU context stays mounted — darkness controlled via uniform (no re-init on phase change)
-export function NightShaderOverlay({ isNight }: NightShaderOverlayProps) {
-  if (!navigator.gpu) return null
+  useEffect(() => {
+    if (!navigator.gpu) setSupported(false)
+  }, [])
 
-  return (
-    <Suspense fallback={null}>
-      <NightScene darkness={isNight ? 0.85 : 0} />
-    </Suspense>
-  )
+  if (!supported) return null
+
+  return <NightCanvas darkness={isNight ? 0.85 : 0} />
 }

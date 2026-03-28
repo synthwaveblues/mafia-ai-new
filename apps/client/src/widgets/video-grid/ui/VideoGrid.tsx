@@ -40,6 +40,13 @@ export function VideoGrid({ players, playerId, playerName, localPeer, remotePeer
   const playerTranscripts = useGameStore((s) => s.playerTranscripts)
   const playerStress = useGameStore((s) => s.playerStress)
   const gameState = useGameStore((s) => s.gameState)
+  const votes = useGameStore((s) => s.votes)
+
+  // Count how many votes each player received
+  const voteTargetCounts = new Map<string, number>()
+  for (const targetId of Object.values(votes)) {
+    voteTargetCounts.set(targetId, (voteTargetCounts.get(targetId) ?? 0) + 1)
+  }
 
   // Build a map: playerName → stream
   const streamByName = new Map<string, MediaStream | null>()
@@ -84,6 +91,7 @@ export function VideoGrid({ players, playerId, playerName, localPeer, remotePeer
               transcript={playerTranscripts[player.name]}
               stressLevel={playerStress[player.id] ?? 0}
               phase={gameState?.phase}
+              votesReceived={voteTargetCounts.get(player.id) ?? 0}
             />
           </div>
         )
