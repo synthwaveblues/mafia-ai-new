@@ -9,7 +9,7 @@ const SERVER_URL = WS_URL.replace(/^ws/, 'http').replace('/ws', '')
 
 const PHASE_LABEL: Record<string, string> = {
   lobby: 'Waiting',
-  role_assignment: 'Starting',
+  role_assignment: 'Started',
   night: 'Night',
   day: 'Day',
   voting: 'Voting',
@@ -60,14 +60,19 @@ export function LobbyPage() {
         <div className="mt-10 w-[300px]">
           <p className="text-[#888] text-sm mb-3 uppercase tracking-widest">Active Rooms</p>
           <div className="flex flex-col gap-2">
-            {rooms.map((room) => (
+            {rooms.map((room) => {
+              const joinable = room.phase === 'lobby'
+              return (
               <button
                 key={room.roomId}
-                onClick={() => setSelectedRoomId(room.roomId)}
+                onClick={() => joinable && setSelectedRoomId(room.roomId)}
+                disabled={!joinable}
                 className={`flex items-center justify-between px-4 py-3 rounded-lg border text-left transition-colors ${
-                  selectedRoomId === room.roomId
-                    ? 'border-white bg-white/10'
-                    : 'border-white/20 bg-white/5 hover:bg-white/10 hover:border-white/40'
+                  !joinable
+                    ? 'border-white/10 bg-white/[0.02] opacity-50 cursor-not-allowed'
+                    : selectedRoomId === room.roomId
+                      ? 'border-white bg-white/10'
+                      : 'border-white/20 bg-white/5 hover:bg-white/10 hover:border-white/40'
                 }`}
               >
                 <span className="font-mono text-sm text-white">{room.roomId}</span>
@@ -79,14 +84,15 @@ export function LobbyPage() {
                         ? 'bg-green-900/60 text-green-400'
                         : room.phase === 'game_over'
                           ? 'bg-gray-700 text-gray-400'
-                          : 'bg-yellow-900/60 text-yellow-400'
+                          : 'bg-red-900/60 text-red-400'
                     }`}
                   >
                     {PHASE_LABEL[room.phase] ?? room.phase}
                   </span>
                 </span>
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
